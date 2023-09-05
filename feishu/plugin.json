@@ -1,0 +1,11 @@
+{
+  "main": "index.html",
+  "logo": "logo.png",
+  "features": [
+    {
+      "code": "feishu",
+      "explain": "飞书",
+      "cmds": ["fs", "feihsu", "飞书"]
+    }
+  ]
+}
