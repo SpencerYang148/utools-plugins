@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mermaid 预览</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        background: #f5f5f5;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .container {
+        display: flex;
+        flex-direction: row;
+        height: 100%;
+        padding: 20px;
+        gap: 20px;
+      }
+
+      .input-section {
+        width: 40%;
+        height: 100%;
+        background: white;
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        display: flex;
+        flex-direction: column;
+      }
+
+      .input-section label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 500;
+        color: #333;
+        font-size: 14px;
+        flex-shrink: 0;
+      }
+
+      #mermaid-input {
+        width: 100%;
+        flex: 1;
+        min-height: 0;
+        padding: 12px;
+        border: 2px solid #e0e0e0;
+        border-radius: 6px;
+        font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
+        font-size: 13px;
+        resize: none;
+        transition: border-color 0.3s;
+      }
+
+      #mermaid-input:focus {
+        outline: none;
+        border-color: #4a90e2;
+      }
+
+      .preview-wrapper {
+        width: 60%;
+        height: 100%;
+        position: relative;
+      }
+
+      .preview-section {
+        width: 100%;
+        height: 100%;
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        overflow: auto;
+        min-height: 0;
+        position: relative;
+      }
+
+      #zoom-container {
+        transform-origin: top left;
+        display: inline-block;
+        width: 100%;
+        height: 100%;
+      }
+
+      #mermaid-output {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      .error-message {
+        color: #e74c3c;
+        padding: 15px;
+        background: #fee;
+        border-radius: 6px;
+        border-left: 4px solid #e74c3c;
+        font-size: 13px;
+        line-height: 1.6;
+        display: none;
+        flex-shrink: 0;
+        margin-top: 10px;
+      }
+
+      .error-message.show {
+        display: block;
+      }
+
+      .examples {
+        margin-top: 10px;
+        font-size: 12px;
+        color: #666;
+        flex-shrink: 0;
+      }
+
+      .examples a {
+        color: #4a90e2;
+        text-decoration: none;
+        margin-right: 10px;
+        cursor: pointer;
+      }
+
+      .examples a:hover {
+        text-decoration: underline;
+      }
+
+      .loading {
+        color: #666;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="input-section">
+        <label for="mermaid-input">输入 Mermaid 代码：</label>
+        <textarea
+          id="mermaid-input"
+          placeholder="例如：graph TD&#10;    A[开始] --> B[处理]&#10;    B --> C[结束]"
+          autofocus
+        ></textarea>
+        <div class="examples">
+          <span>示例：</span>
+          <a data-example="flowchart">流程图</a>
+          <a data-example="sequence">时序图</a>
+          <a data-example="gantt">甘特图</a>
+          <a data-example="class">类图</a>
+          <a data-example="state">状态图</a>
+        </div>
+        <div class="error-message" id="error-message"></div>
+      </div>
+      <div class="preview-wrapper">
+        <div class="preview-section" id="preview-section">
+          <div id="zoom-container">
+            <div id="mermaid-output">
+              <div class="loading">等待输入 Mermaid 代码...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // 初始化 Mermaid
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: "default",
+        flowchart: {
+          useMaxWidth: true,
+          htmlLabels: true,
+        },
+      });
+
+      const inputEl = document.getElementById("mermaid-input");
+      const outputEl = document.getElementById("mermaid-output");
+      const errorEl = document.getElementById("error-message");
+      const previewSection = document.getElementById("preview-section");
+      const zoomContainer = document.getElementById("zoom-container");
+
+      let renderTimeout = null;
+      let isRendering = false;
+      let currentRenderId = null;
+      let currentZoom = 1;
+      const minZoom = 1;
+      const maxZoom = 8;
+      const zoomStep = 0.2;
+
+      // 示例代码
+      const examples = {
+        flowchart: `graph TD
+    A[开始] --> B{判断条件}
+    B -->|是| C[执行操作1]
+    B -->|否| D[执行操作2]
+    C --> E[结束]
+    D --> E`,
+        sequence: `sequenceDiagram
+    participant A as 用户
+    participant B as 系统
+    participant C as 数据库
+    
+    A->>B: 发送请求
+    B->>C: 查询数据
+    C-->>B: 返回结果
+    B-->>A: 响应数据`,
+        gantt: `gantt
+    title 项目时间表
+    dateFormat YYYY-MM-DD
+    section 阶段1
+    任务1 :a1, 2024-01-01, 30d
+    任务2 :a2, after a1, 20d
+    section 阶段2
+    任务3 :a3, 2024-02-01, 25d`,
+        class: `classDiagram
+    class Animal {
+        +String name
+        +int age
+        +eat()
+        +sleep()
+    }
+    class Dog {
+        +bark()
+    }
+    class Cat {
+        +meow()
+    }
+    Animal <|-- Dog
+    Animal <|-- Cat`,
+        state: `stateDiagram-v2
+    [*] --> 空闲
+    空闲 --> 运行中: 开始
+    运行中 --> 暂停: 暂停
+    暂停 --> 运行中: 继续
+    运行中 --> 空闲: 停止
+    空闲 --> [*]`,
+      };
+
+      // 等待渲染完成
+      async function waitForRenderComplete() {
+        if (!isRendering) return;
+        return new Promise((resolve) => {
+          const checkInterval = setInterval(() => {
+            if (!isRendering) {
+              clearInterval(checkInterval);
+              resolve();
+            }
+          }, 50);
+        });
+      }
+
+      // 渲染函数
+      async function renderMermaid(code) {
+        if (!code || !code.trim()) {
+          // 等待当前渲染完成后再清除
+          await waitForRenderComplete();
+          outputEl.innerHTML =
+            '<div class="loading">等待输入 Mermaid 代码...</div>';
+          errorEl.classList.remove("show");
+          return;
+        }
+
+        // 如果正在渲染，等待完成
+        await waitForRenderComplete();
+
+        // 生成本次渲染的唯一 ID
+        const renderId = Date.now();
+        currentRenderId = renderId;
+        isRendering = true;
+
+        try {
+          // 验证语法
+          await mermaid.parse(code);
+
+          // 检查是否已被新的渲染任务取代
+          if (currentRenderId !== renderId) {
+            return;
+          }
+
+          // 安全地清除之前的渲染 - 先移除所有子元素
+          while (outputEl.firstChild) {
+            outputEl.removeChild(outputEl.firstChild);
+          }
+          errorEl.classList.remove("show");
+
+          // 创建新的容器
+          const id = "mermaid-" + renderId;
+          const mermaidDiv = document.createElement("div");
+          mermaidDiv.className = "mermaid";
+          mermaidDiv.id = id;
+          mermaidDiv.textContent = code;
+          outputEl.appendChild(mermaidDiv);
+
+          // 再次检查是否已被新的渲染任务取代
+          if (currentRenderId !== renderId) {
+            return;
+          }
+
+          // 使用 Mermaid 渲染
+          await mermaid.run({
+            nodes: [mermaidDiv],
+          });
+
+          // 最后检查是否已被新的渲染任务取代
+          if (currentRenderId !== renderId) {
+            // 如果已被取代，清除当前渲染结果
+            if (mermaidDiv.parentNode === outputEl) {
+              outputEl.removeChild(mermaidDiv);
+            }
+            return;
+          }
+        } catch (error) {
+          // 只有在当前渲染任务仍然有效时才显示错误
+          if (currentRenderId === renderId) {
+            showError(error.message || "渲染失败，请检查 Mermaid 代码语法");
+          }
+        } finally {
+          // 只有在当前渲染任务仍然有效时才重置状态
+          if (currentRenderId === renderId) {
+            isRendering = false;
+          }
+        }
+      }
+
+      // 显示错误信息
+      function showError(message) {
+        errorEl.textContent = `错误: ${message}`;
+        errorEl.classList.add("show");
+        outputEl.innerHTML =
+          '<div class="loading" style="color: #e74c3c;">渲染失败</div>';
+      }
+
+      // 监听输入变化，使用防抖
+      inputEl.addEventListener("input", (e) => {
+        const code = e.target.value;
+
+        // 清除之前的定时器
+        if (renderTimeout) {
+          clearTimeout(renderTimeout);
+        }
+
+        // 设置新的定时器，500ms 后渲染
+        renderTimeout = setTimeout(() => {
+          renderMermaid(code);
+        }, 500);
+      });
+
+      // 示例点击事件
+      document.querySelectorAll(".examples a").forEach((link) => {
+        link.addEventListener("click", (e) => {
+          e.preventDefault();
+          const exampleType = e.target.getAttribute("data-example");
+          if (examples[exampleType]) {
+            inputEl.value = examples[exampleType];
+            renderMermaid(examples[exampleType]);
+          }
+        });
+      });
+
+      // 如果 utools 传递了文本，自动填充
+      if (window.utools) {
+        utools.onPluginEnter((action) => {
+          if (action.payload) {
+            const text = action.payload;
+            inputEl.value = text;
+            renderMermaid(text);
+          }
+        });
+      }
+
+      // 触摸板双指缩放功能
+      previewSection.addEventListener("wheel", (e) => {
+        // 检测是否为触摸板的缩放手势（ctrlKey 表示双指缩放）
+        if (e.ctrlKey) {
+          e.preventDefault();
+          
+          // 计算缩放变化
+          const delta = e.deltaY > 0 ? -zoomStep : zoomStep;
+          const newZoom = Math.max(minZoom, Math.min(maxZoom, currentZoom + delta));
+          
+          if (newZoom !== currentZoom) {
+            // 获取鼠标相对于容器的位置
+            const rect = previewSection.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            // 获取当前滚动位置
+            const scrollLeft = previewSection.scrollLeft;
+            const scrollTop = previewSection.scrollTop;
+            
+            // 计算鼠标在内容中的位置（考虑滚动和当前缩放）
+            const contentX = (scrollLeft + mouseX) / currentZoom;
+            const contentY = (scrollTop + mouseY) / currentZoom;
+            
+            // 更新缩放比例
+            currentZoom = newZoom;
+            
+            // 使用 requestAnimationFrame 同步更新缩放和滚动
+            requestAnimationFrame(() => {
+              zoomContainer.style.transform = `scale(${currentZoom})`;
+              
+              // 计算新的滚动位置，使鼠标位置保持不变
+              const newScrollLeft = contentX * currentZoom - mouseX;
+              const newScrollTop = contentY * currentZoom - mouseY;
+              
+              previewSection.scrollLeft = newScrollLeft;
+              previewSection.scrollTop = newScrollTop;
+            });
+          }
+        }
+        // 否则允许正常滚动（不阻止默认行为）
+      }, { passive: false });
+
+      // 初始渲染（如果有默认内容）
+      const initialCode = inputEl.value.trim();
+      if (initialCode) {
+        renderMermaid(initialCode);
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "main": "index.html",
+  "logo": "logo.png",
+  "features": [
+    {
+      "code": "mermaid",
+      "explain": "Mermaid 图表预览",
+      "cmds": ["mermaid", "mm", "图表", "流程图", "diagram"]
+    }
+  ]
+}
+
