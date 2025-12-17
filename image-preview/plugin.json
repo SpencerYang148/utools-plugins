@@ -1,0 +1,11 @@
+{
+  "main": "index.html",
+  "logo": "logo.jpg",
+  "features": [
+    {
+      "code": "text",
+      "explain": "图片预览",
+      "cmds": ["image-preview", "image", "preview", "img", "picture", "pic"]
+    }
+  ]
+}
