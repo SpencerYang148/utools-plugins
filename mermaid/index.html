@@ -308,9 +308,24 @@
             return;
           }
 
+          // 保存当前的缩放和滚动位置
+          const originalTransform = zoomContainer.style.transform;
+          const originalScrollLeft = previewSection.scrollLeft;
+          const originalScrollTop = previewSection.scrollTop;
+          
+          // 临时重置缩放以确保正确计算尺寸
+          zoomContainer.style.transform = 'scale(1)';
+          
           // 使用 Mermaid 渲染
           await mermaid.run({
             nodes: [mermaidDiv],
+          });
+          
+          // 恢复缩放和滚动位置
+          requestAnimationFrame(() => {
+            zoomContainer.style.transform = originalTransform;
+            previewSection.scrollLeft = originalScrollLeft;
+            previewSection.scrollTop = originalScrollTop;
           });
 
           // 最后检查是否已被新的渲染任务取代
