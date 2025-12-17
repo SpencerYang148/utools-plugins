@@ -369,9 +369,13 @@
         });
       });
 
-      // 如果 utools 传递了文本，自动填充
+      // 如果 utools 传递了文本，自动填充，除了 code 为 "mermaid"
       if (window.utools) {
         utools.onPluginEnter((action) => {
+          // 排除 code 为 "mermaid" 的情况
+          if (action.code && action.code === "mermaid") {
+            return;
+          }
           if (action.payload) {
             const text = action.payload;
             inputEl.value = text;
